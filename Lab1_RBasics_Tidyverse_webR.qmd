@@ -1,0 +1,363 @@
+---
+title: "ISE 423 — Lab 1 Interactive: R Basics & Tidyverse"
+subtitle: "Runs live in your browser — no R installation needed"
+format:
+  html:
+    theme: cosmo
+    toc: true
+webr:
+  packages: ['dplyr']
+  autoload-packages: true
+filters:
+  - webr
+---
+
+## How to Work with this Page
+
+This page runs **real R code directly in your browser** using WebAssembly
+(via [webR](https://webr.r-wasm.org/)) — you don't need to install R or
+RStudio. The first time the page loads, it may take 10–20 seconds to set
+up the R environment in the background; you'll see a spinner while it
+initializes.
+
+For each exercise:
+
+* Type your code directly into the editable code box.
+* Click **Run Code** to execute it and see the output below the box.
+* Click **Start Over** to reset that box to its starting state.
+* If you get stuck, click **Show Hint**, and if you're still stuck,
+  **Show Solution**.
+
+No packages need to be installed — `dplyr` is already loaded for you when
+the page starts.
+
+---
+
+```{webr}
+#| context: setup
+#| autorun: true
+#| include: false
+DataShift <- data.frame(
+  WorkerID   = 1:12,
+  Shift      = c("Morning","Morning","Morning","Morning","Morning","Morning",
+                 "Night","Night","Night","Night","Night","Night"),
+  UnitsMade  = c(142, 138, 155, 149, 133, 147, 118, 126, 109, 131, 115, 122),
+  DefectFlag = c(FALSE, FALSE, TRUE, FALSE, FALSE, FALSE,
+                 TRUE, FALSE, TRUE, FALSE, TRUE, TRUE)
+)
+```
+
+## Introduction: Which Shift Has the Quality Problem?
+
+A plant manager suspects that one of the two production shifts —
+**Morning** or **Night** — has a higher defect rate than the other, but
+nobody has actually checked the numbers. You've been asked to look at the
+data and find out.
+
+You have a small dataset, `DataShift`, already loaded in the background,
+with 12 workers (6 per shift), their units produced, and whether their
+batch had a flagged defect. Run the box below to preview it:
+
+```{webr}
+head(DataShift)
+```
+
+Over the next few exercises, you'll practice R basics and `tidyverse`
+commands while working toward answering: **does one shift have a
+noticeably higher defect rate than the other?**
+
+---
+
+## Part 1: Data Types
+
+### Exercise 1 — Numerical
+
+Create a variable called `TargetDefectRate` and assign it the value `0.10`
+(the plant's acceptable defect rate, 10%). Then use `str()` to check its
+data type.
+
+```{webr}
+#| exercise: ex1
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+Assign a number to a variable using `<-`, then call `str()` on it.
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+TargetDefectRate <- 0.10
+str(TargetDefectRate)
+```
+:::
+
+---
+
+### Exercise 2 — Character
+
+Create a variable called `PlantName` and assign it the text
+`"Riyadh Assembly Plant"`. Print it with `print()`.
+
+```{webr}
+#| exercise: ex2
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+Character values must be inside quotes.
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+PlantName <- "Riyadh Assembly Plant"
+print(PlantName)
+```
+:::
+
+---
+
+### Exercise 3 — Logical
+
+Create two logical variables: `IsMorningShift` set to `TRUE`, and
+`IsWeekend` set to `FALSE`. Then create a third variable, `IsWorking`,
+by combining `IsMorningShift` and the opposite of `IsWeekend` — use `!`
+to flip `IsWeekend`, and `&` to combine it with `IsMorningShift`.
+Finally, print `IsWorking` using `cat("Working:", IsWorking)`.
+
+```{webr}
+#| exercise: ex3
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+`!` means NOT — it flips TRUE to FALSE and vice versa. Use `&` to
+require both conditions to be TRUE.
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+IsMorningShift <- TRUE
+IsWeekend <- FALSE
+IsWorking <- IsMorningShift & !IsWeekend
+cat("Working:", IsWorking)
+```
+:::
+
+---
+
+## Part 2: Vectors
+
+### Exercise 4 — Building and Summarizing a Vector
+
+The dataset only has 12 workers, but suppose you also independently
+recorded units produced for 5 workers on a third, newly-added weekend
+shift: 102, 98, 110, 95, 107.
+
+Create a vector called `VecWeekendUnits` containing these 5 values, then
+calculate its `mean()` and its `length()`.
+
+```{webr}
+#| exercise: ex4
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+Use `c()` to combine values into a vector: `c(value1, value2, ...)`
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+VecWeekendUnits <- c(102, 98, 110, 95, 107)
+mean(VecWeekendUnits)
+length(VecWeekendUnits)
+```
+:::
+
+---
+
+## Part 3: Data Frames & Tidyverse
+
+Now back to the real question: **does one shift have a higher defect
+rate?** The dataset `DataShift` is already loaded in the background for
+every exercise below.
+
+### Exercise 5 — select()
+
+Use `select()` to create a data frame called `DataShiftSlim` containing
+only the `Shift` and `DefectFlag` columns from `DataShift`.
+
+```{webr}
+#| exercise: ex5
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+`select(DataFrameName, Column1, Column2)`
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+DataShiftSlim <- select(DataShift, Shift, DefectFlag)
+head(DataShiftSlim)
+```
+:::
+
+---
+
+### Exercise 6 — filter()
+
+Use `filter()` to create two data frames: `DataMorning` (only rows where
+`Shift == "Morning"`) and `DataNight` (only rows where
+`Shift == "Night"`).
+
+```{webr}
+#| exercise: ex6
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+`filter(DataFrameName, ColumnName == "Value")`. Remember: `==` for
+comparison, not `=` (which is assignment).
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+DataMorning <- filter(DataShift, Shift == "Morning")
+DataNight <- filter(DataShift, Shift == "Night")
+head(DataMorning)
+head(DataNight)
+```
+:::
+
+---
+
+### Exercise 7 — Calculating Defect Rates
+
+`DefectFlag` is a logical column (`TRUE`/`FALSE`). Recall: `mean()` of a
+logical vector gives you the *proportion* of `TRUE` values.
+
+Calculate `MorningDefectRate` and `NightDefectRate` using `mean()` on the
+`DefectFlag` column of `DataMorning` and `DataNight` (from Exercise 6).
+
+::: {.callout-important appearance="simple"}
+This exercise needs `DataMorning` and `DataNight` to exist. If you get an
+"object not found" error, go back and run Exercise 6's solution first —
+each webR code box on this page shares the same live R session, so once
+you've run it once, the objects stay available.
+:::
+
+```{webr}
+#| exercise: ex7
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+`mean(DataFrameName$ColumnName)` gives the proportion of `TRUE` values
+when the column is logical.
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+MorningDefectRate <- mean(DataMorning$DefectFlag)
+NightDefectRate <- mean(DataNight$DefectFlag)
+cat("Morning defect rate:", MorningDefectRate, "\n",
+    "Night defect rate:", NightDefectRate)
+```
+:::
+
+**Question:** Which shift has the higher defect rate? Is the difference
+large enough that you'd want to investigate further, or could it just be
+random variation given only 6 workers per shift?
+
+---
+
+### Exercise 8 — mutate()
+
+Use `mutate()` on `DataShift` to create a new column, `DefectPerUnit`,
+calculated as `DefectFlag` (coerced to numeric with `as.numeric()`)
+divided by `UnitsMade`. Store the result as `DataShiftRates`.
+
+```{webr}
+#| exercise: ex8
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+`mutate(DataFrameName, NewColumn = as.numeric(ExistingLogicalColumn) / ExistingNumericColumn)`
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+DataShiftRates <- mutate(DataShift,
+                          DefectPerUnit = as.numeric(DefectFlag) / UnitsMade)
+head(DataShiftRates)
+```
+:::
+
+---
+
+### Exercise 9 — Putting It Together with the Pipe
+
+Write a single pipeline (using `|>`) that:
+
+1. Starts with `DataShift`
+2. Filters for `Shift == "Night"`
+3. Selects `WorkerID`, `UnitsMade`, `DefectFlag`
+4. Adds a column `HighOutput` that is `TRUE` if `UnitsMade` is greater
+   than 120
+
+```{webr}
+#| exercise: ex9
+
+```
+
+::: {.callout-note collapse="true" appearance="simple"}
+## Show Hint
+Chain steps with `|>`. Use `filter()`, then `select()`, then `mutate()`
+in order.
+:::
+
+::: {.callout-tip collapse="true" appearance="simple"}
+## Show Solution
+```r
+DataShift |>
+  filter(Shift == "Night") |>
+  select(WorkerID, UnitsMade, DefectFlag) |>
+  mutate(HighOutput = UnitsMade > 120)
+```
+:::
+
+---
+
+## Wrap-Up
+
+You've now practiced:
+
+* Numerical, character, and logical data types
+* Building and summarizing vectors
+* `select()`, `filter()`, `mutate()`, and chaining with `|>`
+
+...all while working toward a real question: whether the Night shift's
+defect rate is meaningfully different from the Morning shift's. Keep
+this same question in mind — once we cover hypothesis testing concepts
+and classification models later in the course, you'll have better tools
+to answer it rigorously rather than just eyeballing the two rates.
+
+**Happy analyzing!**
