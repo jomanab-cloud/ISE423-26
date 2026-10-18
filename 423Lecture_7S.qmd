@@ -1,0 +1,671 @@
+---
+title: "Regularization"
+subtitle: |
+  Ridge and Lasso <br>
+  Dr. Jomana Bashatah <br>
+  Slides adapted from Carsten Lange
+format: 
+  revealjs:
+    theme: [default, Theme/custom.scss]
+    footer: "ISE 423 - Special Topics | Dr. Jomana Bashatah| Lecture 7"
+    highlight-style: github
+    slide-number: true
+    #chalkboard: true
+    #self-contained: true
+    width: 1920
+    height: 1080
+    margin: 0.05
+    min-scale: 0.2
+    max-scale: 3.0
+    code-fold: true
+    scrollable: true
+  pptx:
+    reference-doc: Theme/ISE423_pptx_template.pptx
+revealjs-plugins:
+  - pointer
+execute:
+  echo: false
+---
+
+## What Will You Learn/Review {.scrollable .smaller}
+
+-   The **basic idea behind regularization** 
+
+-   The difference between the **penalty terms for Lasso and Ridge** regression models 
+
+-   How the **target function for Lasso** regularized regression models differs from the $MSE$ function of an unregularized model 
+
+-   How to create a **workflow for a Lasso** regularized regression using the *R* `tidymodels` framework 
+
+
+-   How the **target function for Ridge** regularized regression model differs from the $MSE$ function of an unregularized model 
+
+-   How to create a **workflow for a Ridge** regularized model using the *R* `tidymodels` framework
+
+
+---
+
+## Packages Needed (Already Installed in the background)
+
+- tidyverse
+- tidymodels
+- glmnet
+
+
+---
+
+## Loading the Libraries, Data, and Splitting in Training/Testing Data:
+
+```{r}
+#| echo: true
+#| 
+library(tidymodels); library(rio); library(janitor)
+DataHousing = import("https://raw.githubusercontent.com/jomanab-cloud/ISE351-25-Presentations/80f7609c6bcb4887517dcaff62908459cee33e33/HousingData.csv") |>
+  clean_names("upper_camel") |>
+  select(Price, Sqft=SqftLiving)
+
+set.seed(777)
+Split001=initial_split(DataHousing, prop=0.001, strata=Price)
+DataTrain=training(Split001)
+DataTest=testing(Split001)
+print(Split001)
+
+```
+
+Later, we will use `regularization` to **mitigate the overfitting problem**
+
+
+---
+
+## The Model {.smaller}
+```{=tex}
+\begin{equation}
+\displaystyle\widehat{Price}_i=\beta_1 Sqft_i+\beta_2 Sqft_i^2+\beta_3 Sqft_i^3+\beta_4 Sqft_i^4+\beta_5 Sqft_i^5+\beta_6 
+\end{equation}
+```
+
+
+---
+
+## Benchmark: Unregularized Model
+
+### Minimizes the MSE by Choosing the Optimal $\beta s$
+
+
+$$
+\displaystyle MSE=\frac{1}{20}\sum_{i=1}^{20} \left ( \widehat{Price}_i-Price_i\right)^2 
+$$
+with: 
+
+```{=tex}
+\begin{equation}
+\displaystyle\widehat{Price}_i=\beta_1 Sqft_i+\beta_2 Sqft_i^2+\beta_3 Sqft_i^3+\beta_4 Sqft_i^4+\beta_5 Sqft_i^5+\beta_6 
+\end{equation}
+```
+
+
+---
+
+## Running the Unregularized Benchmark Model
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+```
+
+```{r}
+#| echo: true
+
+RecipeHouses=recipe(Price~., data=DataTrain) |> step_mutate(Sqft2=Sqft^2,Sqft3=Sqft^3,Sqft4=Sqft^4,Sqft5=Sqft^5) |>
+  step_normalize(all_predictors())
+
+ModelDesignBenchmark=linear_reg() |>
+  set_engine("lm") |>
+  set_mode("regression")
+
+WFModelBenchmark=workflow() |>
+  add_model(ModelDesignBenchmark) |>
+  add_recipe(RecipeHouses) |>
+  fit(DataTrain)
+
+tidy(WFModelBenchmark) #prints the betas in a tidy format
+```
+
+
+---
+
+## Benchmark: Assessing Prediction Quality 
+
+### Training Data
+
+```{r}
+#| echo: true
+DataTrainWithPredBenchmark=augment(WFModelBenchmark, DataTrain)
+metrics(DataTrainWithPredBenchmark, truth=Price, estimate=.pred)
+```
+
+### Testing Data
+
+```{r}
+#| echo: true
+DataTestWithPredBenchmark=augment(WFModelBenchmark, DataTest)
+metrics(DataTestWithPredBenchmark, truth=Price, estimate=.pred)
+```
+
+
+---
+
+## Regularization {.smaller}
+
+### Ridge
+
+```{=tex}
+\begin{eqnarray}
+T^{arget}&=&\frac{1}{20}\sum_{i=1}^{20} \left ( \widehat{Price}_i-Price_i\right)^2+\lambda P^{enalty} \\
+\mbox{with:}&& \widehat{Price}_i=\beta_1 Sqft_i+\beta_2 Sqft_i^2+\beta_3 Sqft_i^3+\beta_4 Sqft_i^4+\beta_5 Sqft_i^5+\beta_6 \nonumber \\
+\mbox{with:}&& P^{enalty}=\sum_{j=1}^{5} \beta_j^2 \nonumber
+\end{eqnarray}
+```
+
+**Two Goals**: Minimize $MSE$ and Minimize Penalty (small or zero $\beta s$)
+
+$T^{arget}$ value still only depends on data and $\beta s$.
+
+
+**Note**, when reducing a large and a small parameter by the same amount, the impact of reducing the large parameter has a bigger impact on the *penalty* than reducing the  small parameter. Thus. **Ridge has a tendency to reduce large rather than small parameters**
+
+
+---
+
+## Running the Ridge Model
+
+```{r}
+#| echo: true
+library(glmnet)
+set.seed(777)
+ModelDesignRidge=linear_reg(penalty=1000000, mixture=0) |> #0 for ridge, 1 for lasso
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+WFModelRidge=workflow() |>
+  add_model(ModelDesignRidge) |>
+  add_recipe(RecipeHouses) |>
+  fit(DataTrain)
+
+tidy(WFModelRidge)
+```
+
+
+---
+
+## Comparing the Coefficients ($\beta s$)
+
+### Benchmark Coefficients ($\beta s$)
+```{r}
+tidy(extract_fit_parsnip(WFModelBenchmark)) # prints the betas in a tidy format
+```
+
+### Ridge Model Coefficients ($\beta s$)
+```{r}
+tidy(extract_fit_parsnip(WFModelRidge)) # prints the final betas in a tidy format
+```
+
+
+---
+
+## Assessing Prediction Quality Benchmark & Ridge Model (Training Data)
+
+:::{.columns}
+
+:::{.column width = "50%"}
+### Benchmark
+```{r}
+#| echo: true
+DataTrainWithPredBenchmark=augment(WFModelBenchmark, DataTrain)
+metrics(DataTrainWithPredBenchmark, truth=Price, estimate=.pred)
+```
+
+:::
+
+:::{.column width = "50%"}
+### Ridge
+```{r}
+#| echo: true
+DataTrainWithPredRidge=augment(WFModelRidge, DataTrain)
+metrics(DataTrainWithPredRidge, truth=Price, estimate=.pred)
+```
+
+:::
+
+:::
+
+
+---
+
+## Assessing Prediction Quality Benchmark & Ridge Model (Testing Data)
+
+:::{.columns}
+
+:::{.column width = "50%"}
+### Benchmark
+```{r}
+#| echo: true
+DataTestWithPredBenchmark=augment(WFModelBenchmark, DataTest)
+metrics(DataTestWithPredBenchmark, truth=Price, estimate=.pred)
+```
+
+:::
+
+:::{.column width = "50%"}
+### Ridge
+```{r}
+#| echo: true
+DataTestWithPredRidge=augment(WFModelRidge, DataTest)
+metrics(DataTestWithPredRidge, truth=Price, estimate=.pred)
+```
+
+:::
+
+:::
+
+
+---
+
+## Regularization {.smaller}
+### Lasso
+
+```{=tex}
+\begin{eqnarray}
+T^{arget}&=&\frac{1}{20}\sum_{i=1}^{20} \left ( \widehat{Price}_i-Price_i\right)^2+\lambda P^{enalty} \\
+\mbox{with:}&& \widehat{Price}_i=\beta_1 Sqft_i+\beta_2 Sqft_i^2+\beta_3 Sqft_i^3+\beta_4 Sqft_i^4+\beta_5 Sqft_i^5+\beta_6 \nonumber \\
+\mbox{with:}&& P^{enalty}=\sum_{j=1}^{5} | \beta_j | \nonumber
+\end{eqnarray}
+```
+
+**Two Goals**: Minimize $MSE$ and Minimize Penalty (small or zero $\beta s$)
+
+$T^{arget}$ value still only depends on data and $\beta s$.
+
+**Note**, reducing a large or a small $\beta$ parameter by the same amount has the same impact on the *penalty*. Thus Lasso would always reduce the parameter where the reduction has the smallest impact on the $MSE$. **Some parameters might be reduced to zero**
+
+
+---
+
+## Running the Lasso Model
+
+```{r}
+#| echo: true
+library(glmnet)
+set.seed(777)
+ModelDesignLasso=linear_reg(penalty=500, mixture=1) |>
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+WFModelLasso=workflow() |>
+  add_model(ModelDesignLasso) |>
+  add_recipe(RecipeHouses) |>
+  fit(DataTrain)
+
+tidy(WFModelLasso)
+```
+
+
+---
+
+## Comparing the Coefficients ($\beta s$)
+
+### Benchmark Coefficients ($\beta s$)
+```{r}
+tidy(extract_fit_parsnip(WFModelBenchmark)) # prints the betas in a tidy format
+```
+
+### Lasso Model Coefficients ($\beta s$)
+```{r}
+tidy(extract_fit_parsnip(WFModelLasso)) # prints the final betas in a tidy format
+```
+
+
+---
+
+## Comparing Prediction Quality Benchmark & Lasso Model (Training Data)
+
+:::{.columns}
+
+:::{.column width = "50%"}
+
+### Benchmark
+
+```{r}
+#| echo: true
+
+DataTrainWithPredBenchmark=augment(WFModelBenchmark, DataTrain)
+metrics(DataTrainWithPredBenchmark, truth=Price, estimate=.pred)
+```
+:::
+
+:::{.column width = "50%"}
+
+### Lasso
+
+```{r}
+#| echo: true
+#| 
+DataTrainWithPredLasso=augment(WFModelLasso, DataTrain)
+metrics(DataTrainWithPredLasso, truth = Price, estimate = .pred)
+```
+:::
+
+:::
+
+
+--- 
+
+## Comparing Prediction Quality Benchmark & Lasso Model (Testing Data)
+
+:::{.columns}
+
+:::{.column width = "50%"}
+
+### Benchmark 
+
+```{r}
+#| echo: true
+DataTestWithPredBenchmark=augment(WFModelBenchmark, DataTest)
+metrics(DataTestWithPredBenchmark, truth=Price, estimate=.pred)
+```
+
+:::
+
+:::{.column width = "50%"}
+
+### Lasso
+
+```{r}
+#| echo: true
+DataTestWithPredLasso=augment(WFModelLasso, DataTest)
+metrics(DataTestWithPredLasso, truth=Price, estimate=.pred)
+```
+:::
+
+:::
+
+
+---
+
+## Comparing Parameter Reduction for Different Penalties
+
+```{r}
+#| echo: false
+library(glmnet)
+library(scales)
+
+BakedTrain = RecipeHouses |> prep() |> bake(new_data = NULL)
+XTrain = BakedTrain |> select(-Price) |> as.matrix()
+YTrain = BakedTrain$Price
+
+RidgePath = glmnet(XTrain, YTrain, alpha = 0)
+LassoPath = glmnet(XTrain, YTrain, alpha = 1)
+
+# Pulls the FULL dense coefficient matrix (including exact zeros) instead of
+# tidy()'s sparse version, which silently drops any term that is ever 0
+PathToLong = function(PathModel) {
+  as.matrix(coef(PathModel)) |>
+    as.data.frame() |>
+    rownames_to_column("term") |>
+    filter(term != "(Intercept)") |>
+    pivot_longer(-term, names_to = "step", values_to = "estimate") |>
+    mutate(step = as.integer(gsub("s", "", step)) + 1,
+           lambda = PathModel$lambda[step]) |>
+    rename(`Model-Parameter` = term)
+}
+
+RidgePathTidy = PathToLong(RidgePath)
+LassoPathTidy = PathToLong(LassoPath)
+```
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**Ridge:**
+
+```{r}
+#| echo: false
+#| fig-width: 7
+#| fig-height: 5
+ggplot(RidgePathTidy, aes(x = lambda, y = estimate, color = `Model-Parameter`)) +
+  geom_line(linewidth = 1) +
+  scale_x_log10(labels = comma) +
+  scale_y_continuous(labels = comma) +
+  labs(x = "\u03bb (corresponds to penalty in tidymodels)",
+       y = "Model-Parameter Estimate") +
+  theme_minimal()
+```
+
+*Shrinkage of Parameters $\beta s$ for Increasing Penalty Factors ($\lambda$)*
+:::
+
+::: {.column width="50%"}
+**Lasso:**
+
+```{r}
+#| echo: false
+#| fig-width: 7
+#| fig-height: 5
+ggplot(LassoPathTidy, aes(x = lambda, y = estimate, color = `Model-Parameter`)) +
+  geom_line(linewidth = 1) +
+  scale_x_log10(labels = comma) +
+  scale_y_continuous(labels = comma) +
+  labs(x = "\u03bb (corresponds to penalty in tidymodels)",
+       y = "Model-Parameter Estimate") +
+  theme_minimal()
+```
+
+*Shrinkage of Parameters $\beta s$ for Increasing Penalty Factors ($\lambda$)*
+
+:::
+
+::::
+
+
+---
+
+
+## Elastic Net
+
+```{=tex}
+\begin{equation}
+T^{arget}_{Elastic} = \underbrace{\frac{1}{20}\sum_{i=1}^{20}\left(\widehat{Price}_i-Price_i\right)^2}_{MSE} + \lambda\overbrace{\left(\alpha P^{enalty}_{Lasso} + (1-\alpha) P^{enalty}_{Ridge}\right)}^{P^{enalty}_{Elastic}}
+\end{equation}
+```
+
+with: 
+
+```{=tex}
+\begin{equation}
+\widehat{Price}_i = \beta_1 Sqft_i+\beta_2 Sqft_i^2+\beta_3 Sqft_i^3+\beta_4 Sqft_i^4+\beta_5 Sqft_i^5+\beta_6
+\end{equation}
+```
+
+```{=tex}
+\begin{equation}
+T^{arget}_{Elastic} = \underbrace{\frac{1}{20}\sum_{i=1}^{20}\left(\widehat{Price}_i-Price_i\right)^2}_{MSE} + 
+\lambda\overbrace{\left(\underbrace{\alpha\sum_{j=1}^{5}|\beta_j|}_{P^{enalty}_{Lasso}} + \underbrace{(1-\alpha)\sum_{j=1}^{5}\beta_j^2}_{P^{enalty}_{Ridge}}\right)}^{P^{enalty}_{Elastic}}
+\end{equation}
+```
+
+
+---
+
+## Exercise: Tuning Elastic Net
+
+```{r}
+#| context: setup
+
+library(dplyr)
+library(tidymodels)
+library(glmnet)
+
+DataHousing = read.csv(url("https://raw.githubusercontent.com/jomanab-cloud/ISE351-25-Presentations/80f7609c6bcb4887517dcaff62908459cee33e33/HousingData.csv"))
+DataHousing = DataHousing |> rename(Price = price, Sqft = sqft_living)
+```
+
+We'll deliberately use a tiny training sample so overfitting shows up clearly, then fix it with Elastic Net.
+
+
+---
+
+## Benchmark: Unregularized Model (Overfits on Purpose)
+
+```{r}
+#| echo: true
+set.seed(777)
+DataHousing = import("Data/HousingData.csv") |>
+  clean_names("upper_camel") |>
+  select(Price, Sqft=SqftLiving)
+Split = initial_split(DataHousing, prop = 0.02, strata = Price)
+DataTrain = training(Split)
+DataTest  = testing(Split)
+
+RecipeHouses = recipe(Price ~ Sqft, data = DataTrain) |>
+  step_mutate(Sqft2 = Sqft^2, Sqft3 = Sqft^3, Sqft4 = Sqft^4, Sqft5 = Sqft^5) |>
+  step_normalize(all_predictors())
+
+ModelBenchmark = linear_reg() |> set_engine("lm") |> set_mode("regression")
+WFBenchmark = workflow() |> add_recipe(RecipeHouses) |> add_model(ModelBenchmark) |> fit(DataTrain)
+
+```
+
+```{r} 
+#| echo: false
+cat("Train RMSE:", rmse_vec(DataTrain$Price, predict(WFBenchmark, DataTrain)$.pred), "\n")
+cat("Train Rsq:", rsq_vec(DataTrain$Price, predict(WFBenchmark, DataTrain)$.pred), "\n")
+cat("Train mae:", mae_vec(DataTrain$Price, predict(WFBenchmark, DataTrain)$.pred), "\n")
+cat("Test RMSE: ", rmse_vec(DataTest$Price,  predict(WFBenchmark, DataTest)$.pred),  "\n")
+cat("Test Rsq: ", rsq_vec(DataTest$Price,  predict(WFBenchmark, DataTest)$.pred),  "\n")
+cat("Test mae: ", mae_vec(DataTest$Price,  predict(WFBenchmark, DataTest)$.pred),  "\n")
+```
+
+Notice the gap between train and test metrics: that gap *is* overfitting.
+
+
+---
+
+## Specify a Tunable Model
+
+```{r}
+#| echo: true
+ModelTune = linear_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet") |> set_mode("regression")
+```
+
+`tune()` is a placeholder; we haven't picked penalty or mixture values yet.
+
+
+---
+
+## Build the Workflow
+
+```{r}
+#| echo: true
+WFTune = workflow() |> add_recipe(RecipeHouses) |> add_model(ModelTune)
+```
+
+
+---
+
+## Create Resampling Folds
+
+```{r}
+#| echo: true
+set.seed(777)
+Folds = vfold_cv(DataTrain, v = 3)
+```
+
+Cross-validation happens entirely inside the training data. The test set stays untouched until the very end.
+
+
+---
+
+## Define the Candidate Values
+
+```{r}
+#| echo: true
+PenaltyGrid = penalty(range = c(1, 7))      # log10 scale: 10 to 10,000,000
+MixtureGrid = mixture(range = c(0, 1))      # 0 = Ridge, 1 = Lasso
+```
+
+
+---
+
+## Build the Full Tuning Grid
+
+```{r}
+#| echo: true
+Grid = grid_regular(PenaltyGrid, MixtureGrid, levels = c(penalty = 7, mixture = 4))
+Grid
+```
+
+Every row is one penalty/mixture combination we're about to test.
+
+
+---
+
+## Run the Tuning Search
+
+```{r}
+#| echo: true
+TuneResults = tune_grid(WFTune, resamples = Folds, grid = Grid)
+```
+
+
+---
+
+## Inspect the Results
+
+```{r}
+#| echo: true
+collect_metrics(TuneResults) |> filter(.metric == "rmse") |> arrange(mean)
+```
+
+```{r}
+#| echo: true
+collect_metrics(TuneResults) |> filter(.metric == "rsq") |> arrange(desc(mean))
+```
+
+
+---
+
+## Select the Best Combination
+
+```{r}
+#| echo: true
+BestParams = select_best(TuneResults, metric = "rmse")
+print(BestParams)
+```
+
+
+---
+
+## Finalize the Workflow
+
+```{r}
+#| echo: true
+WFFinal = finalize_workflow(WFTune, BestParams)
+```
+
+
+---
+
+## Refit and Evaluate on Test Data
+
+```{r}
+#| echo: true
+FinalFit = fit(WFFinal, DataTrain)
+cat("Tuned Test RMSE:", rmse_vec(DataTest$Price, predict(FinalFit, DataTest)$.pred), "\n")
+cat("Tuned Test Rsq:", rsq_vec(DataTest$Price, predict(FinalFit, DataTest)$.pred), "\n")
+cat("Tuned Test mae:", mae_vec(DataTest$Price, predict(FinalFit, DataTest)$.pred), "\n")
+```
+
+Compare this to the benchmark's test RMSE a few slides back. That improvement is what regularization bought you.
+
+
